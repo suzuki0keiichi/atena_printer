@@ -1,0 +1,15 @@
+{
+  "spreadsheet_id": "ここにスプレッドシートのIDを入れる",
+  "sheet_name": "住所録",
+  "credentials_file": "credentials.json",
+  "font_file": "/usr/share/fonts/opentype/ipaexfont-mincho/ipaexm.ttf",
+  "output_file": "nenga.pdf",
+  "year": 2026,
+  "sender": {
+    "family_name": "山田",
+    "given_name": "太郎",
+    "postal_code": "1000001",
+    "address1": "東京都千代田区千代田一丁目一番",
+    "address2": "パレスマンション一〇一号室"
+  }
+}
