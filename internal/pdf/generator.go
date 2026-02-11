@@ -11,23 +11,37 @@ import (
 )
 
 type Generator struct {
-	pdf    *gopdf.GoPdf
-	font   string
-	sender config.Sender
+	pdf        *gopdf.GoPdf
+	bodyFont   string
+	postalFont string
+	sender     config.Sender
 }
 
-func NewGenerator(fontFile string, sender config.Sender) (*Generator, error) {
+func NewGenerator(fontFile, postalFontFile string, sender config.Sender) (*Generator, error) {
 	p := &gopdf.GoPdf{}
 	p.Start(gopdf.Config{
 		PageSize: gopdf.Rect{W: HagakiWidth, H: HagakiHeight},
 		Unit:     gopdf.UnitMM,
 	})
 
-	if err := p.AddTTFFont("mincho", fontFile); err != nil {
+	if err := p.AddTTFFont("body", fontFile); err != nil {
 		return nil, fmt.Errorf("フォントの読み込みに失敗: %w", err)
 	}
 
-	return &Generator{pdf: p, font: "mincho", sender: sender}, nil
+	postalFontName := "body"
+	if postalFontFile != "" {
+		if err := p.AddTTFFont("postal", postalFontFile); err != nil {
+			return nil, fmt.Errorf("郵便番号フォントの読み込みに失敗: %w", err)
+		}
+		postalFontName = "postal"
+	}
+
+	return &Generator{
+		pdf:        p,
+		bodyFont:   "body",
+		postalFont: postalFontName,
+		sender:     sender,
+	}, nil
 }
 
 // AddPage は1人分の宛名ページを追加する
@@ -122,7 +136,7 @@ func (g *Generator) drawRecipientName(addr model.Address) {
 const ptToMM = 0.3528
 
 func (g *Generator) drawPostalCode(code string, xs []float64, y float64, fontSize float64) {
-	if err := g.pdf.SetFont(g.font, "", int(fontSize)); err != nil {
+	if err := g.pdf.SetFont(g.postalFont, "", int(fontSize)); err != nil {
 		return
 	}
 
@@ -145,7 +159,7 @@ func (g *Generator) drawVerticalText(x, startY float64, text string, fontSize fl
 	// 住所の数字は全角に変換
 	text = halfToFull(text)
 
-	if err := g.pdf.SetFont(g.font, "", int(fontSize)); err != nil {
+	if err := g.pdf.SetFont(g.bodyFont, "", int(fontSize)); err != nil {
 		return
 	}
 

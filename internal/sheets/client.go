@@ -1,11 +1,14 @@
 package sheets
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"atena_printer/internal/model"
@@ -13,19 +16,55 @@ import (
 
 const sheetsAPIBase = "https://sheets.googleapis.com/v4/spreadsheets"
 
+type clientMode int
+
+const (
+	modeServiceAccount clientMode = iota
+	modePublicCSV
+	modeTSV
+)
+
 type Client struct {
+	mode          clientMode
 	ts            *tokenSource
 	httpClient    *http.Client
 	spreadsheetID string
 	sheetName     string
+	publicCSVURL  string
+	tsvFile       string
 }
 
-func New(credentialsFile, spreadsheetID, sheetName string) (*Client, error) {
+func New(credentialsFile, spreadsheetID, sheetName, tsvFile string) (*Client, error) {
+	if tsvFile != "" {
+		return &Client{
+			mode:       modeTSV,
+			tsvFile:    tsvFile,
+			sheetName:  sheetName,
+			httpClient: &http.Client{},
+		}, nil
+	}
+
+	if credentialsFile == "" {
+		publicCSVURL := fmt.Sprintf(
+			"https://docs.google.com/spreadsheets/d/%s/gviz/tq?tqx=out:csv&sheet=%s",
+			url.PathEscape(spreadsheetID),
+			url.QueryEscape(sheetName),
+		)
+		return &Client{
+			mode:          modePublicCSV,
+			httpClient:    &http.Client{},
+			spreadsheetID: spreadsheetID,
+			sheetName:     sheetName,
+			publicCSVURL:  publicCSVURL,
+		}, nil
+	}
+
 	ts, err := newTokenSource(credentialsFile)
 	if err != nil {
 		return nil, err
 	}
 	return &Client{
+		mode:          modeServiceAccount,
 		ts:            ts,
 		httpClient:    &http.Client{},
 		spreadsheetID: spreadsheetID,
@@ -33,16 +72,16 @@ func New(credentialsFile, spreadsheetID, sheetName string) (*Client, error) {
 	}, nil
 }
 
-// ReadAddresses はスプレッドシートから住所一覧を読み込む。
+// ReadAddresses は設定されたデータソースから住所一覧を読み込む。
 func (c *Client) ReadAddresses(year int) ([]model.Address, map[int]model.YearStatus, error) {
 	readRange := c.sheetName + "!A1:ZZ"
 	values, err := c.getValues(readRange)
 	if err != nil {
-		return nil, nil, fmt.Errorf("スプレッドシートの読み込みに失敗: %w", err)
+		return nil, nil, fmt.Errorf("住所データの読み込みに失敗: %w", err)
 	}
 
 	if len(values) < 2 {
-		return nil, nil, fmt.Errorf("スプレッドシートにデータがありません")
+		return nil, nil, fmt.Errorf("住所データがありません")
 	}
 
 	header := values[0]
@@ -91,6 +130,10 @@ func (c *Client) ReadAddresses(year int) ([]model.Address, map[int]model.YearSta
 
 // MarkSent はスプレッドシートの指定行の「YYYY送」列に ○ を書き込む。
 func (c *Client) MarkSent(year int, rows []int) error {
+	if c.mode != modeServiceAccount {
+		return fmt.Errorf("読み取り専用モードでは mark-sent は使えません。credentials_file を設定したスプレッドシートモードを使用してください")
+	}
+
 	headerValues, err := c.getValues(c.sheetName + "!1:1")
 	if err != nil {
 		return fmt.Errorf("ヘッダ行の読み込みに失敗: %w", err)
@@ -133,6 +176,13 @@ type valuesResponse struct {
 }
 
 func (c *Client) getValues(readRange string) ([][]string, error) {
+	if c.mode == modePublicCSV {
+		return c.getValuesFromPublicCSV(readRange)
+	}
+	if c.mode == modeTSV {
+		return c.getValuesFromTSV(readRange)
+	}
+
 	token, err := c.ts.getToken()
 	if err != nil {
 		return nil, err
@@ -172,6 +222,76 @@ func (c *Client) getValues(readRange string) ([][]string, error) {
 	return result.Values, nil
 }
 
+func (c *Client) getValuesFromPublicCSV(readRange string) ([][]string, error) {
+	req, err := http.NewRequest("GET", c.publicCSVURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(
+			"公開シートの読み込みに失敗 (HTTP %d)。シートを『リンクを知っている全員が閲覧可』にしているか確認してください",
+			resp.StatusCode,
+		)
+	}
+
+	reader := csv.NewReader(bytes.NewReader(body))
+	reader.FieldsPerRecord = -1
+	values, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("公開CSVの解析に失敗: %w", err)
+	}
+
+	if strings.HasSuffix(readRange, "!1:1") {
+		if len(values) == 0 {
+			return nil, nil
+		}
+		return [][]string{values[0]}, nil
+	}
+
+	return values, nil
+}
+
+func (c *Client) getValuesFromTSV(readRange string) ([][]string, error) {
+	data, err := os.ReadFile(c.tsvFile)
+	if err != nil {
+		return nil, fmt.Errorf("TSVファイルの読み込みに失敗: %w", err)
+	}
+
+	// UTF-8 BOM が付いている場合に先頭セルへ混入しないよう除去する。
+	if len(data) >= 3 && bytes.Equal(data[:3], []byte{0xEF, 0xBB, 0xBF}) {
+		data = data[3:]
+	}
+
+	reader := csv.NewReader(bytes.NewReader(data))
+	reader.Comma = '\t'
+	reader.FieldsPerRecord = -1
+	values, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("TSVの解析に失敗: %w", err)
+	}
+
+	if strings.HasSuffix(readRange, "!1:1") {
+		if len(values) == 0 {
+			return nil, nil
+		}
+		return [][]string{values[0]}, nil
+	}
+
+	return values, nil
+}
+
 type batchData struct {
 	Range  string     `json:"range"`
 	Values [][]string `json:"values"`
@@ -183,6 +303,10 @@ type batchUpdateRequest struct {
 }
 
 func (c *Client) batchUpdate(data []batchData) error {
+	if c.mode != modeServiceAccount {
+		return fmt.Errorf("読み取り専用モードでは書き込みできません")
+	}
+
 	token, err := c.ts.getToken()
 	if err != nil {
 		return err

@@ -1,0 +1,17 @@
+{
+  "spreadsheet_id": "unused-in-tsv-mode",
+  "sheet_name": "住所録",
+  "credentials_file": "",
+  "tsv_file": "samples/addresses.sample.tsv",
+  "font_file": "samples/fonts/YujiBoku-Regular.ttf",
+  "postal_font_file": "/Library/Fonts/Arial Unicode.ttf",
+  "output_file": "samples/renders/sample_yujiboku.pdf",
+  "year": 2026,
+  "sender": {
+    "family_name": "山田",
+    "given_name": "太郎",
+    "postal_code": "1000001",
+    "address1": "東京都千代田区千代田一丁目一番",
+    "address2": "サンプルハイツ201"
+  }
+}

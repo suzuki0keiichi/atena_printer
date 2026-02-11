@@ -4,14 +4,7 @@ Google Spreadsheet から住所録を読み込み、はがき宛名面の PDF �
 
 ## セットアップ
 
-### 1. Google Cloud の準備
-
-1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成
-2. Google Sheets API を有効化
-3. サービスアカウントを作成し、JSON 鍵ファイルをダウンロード
-4. スプレッドシートをサービスアカウントのメールアドレスに共有（編集権限）
-
-### 2. スプレッドシートの準備
+### 1. スプレッドシートの準備
 
 シート名「住所録」（config で変更可能）に以下のヘッダ行を作成:
 
@@ -28,14 +21,42 @@ Google Spreadsheet から住所録を読み込み、はがき宛名面の PDF �
 
 年が変わったら `2027送`, `2027受`, `2027喪中` のように列を追加していく。
 
-### 3. フォントの準備
+#### モードA: 公開シート読み取り（Google Cloud不要）
+
+Google Cloud 設定をせずに使う場合は、シートを「リンクを知っている全員が閲覧可」にする。
+この場合、`generate` / `list` が利用できる。
+
+#### モードB: 手動TSV読み取り（Google Cloud不要・非公開シート向け）
+
+1. Google Spreadsheet で対象シートを開く
+2. `ファイル` → `ダウンロード` → `タブ区切り値 (.tsv、現在のシート)`
+3. 生成された `.tsv` をローカルに保存
+4. `config.json` の `tsv_file` にそのパスを設定
+
+この場合も `generate` / `list` が利用できる。
+
+#### 書き込みモード（上級）
+
+`mark-sent` でシート更新まで行う場合のみ、Google Cloud でサービスアカウントを用意する。
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成
+2. Google Sheets API を有効化
+3. サービスアカウントを作成し、JSON 鍵ファイルをダウンロード
+4. スプレッドシートをサービスアカウントのメールアドレスに共有（編集権限）
+
+### 2. フォントの準備
 
 日本語 TrueType フォント（.ttf）が必要。以下は無料の例:
 
 - **IPAex明朝** (ipaexm.ttf): https://moji.or.jp/ipafont/
 - **Noto Serif JP**: Google Fonts からダウンロード
 
-### 4. 設定ファイル
+#### 推奨プリセット
+
+- 住所・氏名: `YujiSyuku-Regular.ttf`（毛筆感はあるが主張が強すぎない）
+- 郵便番号: `Arial Unicode.ttf` などの機械系フォント
+
+### 3. 設定ファイル
 
 `config.example.json` をコピーして `config.json` を作成:
 
@@ -49,8 +70,10 @@ cp config.example.json config.json
 {
   "spreadsheet_id": "スプレッドシートのURL中のID",
   "sheet_name": "住所録",
-  "credentials_file": "credentials.json",
-  "font_file": "/path/to/ipaexm.ttf",
+  "credentials_file": "",
+  "tsv_file": "",
+  "font_file": "/path/to/YujiSyuku-Regular.ttf",
+  "postal_font_file": "/path/to/Arial-Unicode.ttf",
   "output_file": "nenga.pdf",
   "year": 2026,
   "sender": {
@@ -63,7 +86,12 @@ cp config.example.json config.json
 }
 ```
 
-### 5. ビルド
+- `tsv_file` が空でない場合: `tsv_file` を優先してローカルTSVから読み込む（`generate` / `list`）。
+- `tsv_file` が空かつ `credentials_file` が空の場合: 公開シートから読み込む（`generate` / `list`）。
+- `credentials_file` に JSON 鍵ファイルを指定した場合: 読み書き可能モード（`mark-sent`）が利用可能。
+- `postal_font_file` は任意。設定すると郵便番号だけ別フォントにできる（未設定時は `font_file` を使用）。
+
+### 4. ビルド
 
 ```bash
 go build -o atena_printer .
@@ -106,3 +134,4 @@ go build -o atena_printer .
 ```
 
 対象の宛先の「YYYY送」列に ○ が記録される。
+`mark-sent` は `tsv_file` 未使用かつ `credentials_file` 設定時のみ利用可能。

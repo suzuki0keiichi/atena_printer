@@ -57,6 +57,11 @@ generate オプション:
 
 mark-sent オプション:
   -dry-run       実際には書き込まず対象を表示する
+
+補足:
+  tsv_file が設定されている場合はローカルTSV読み取りモードになります。
+  それ以外で credentials_file が空の場合は公開シート読み取りモードになり、
+  generate / list のみ利用できます。
 `)
 }
 
@@ -75,7 +80,7 @@ func cmdGenerate(args []string) {
 		cfg.OutputFile = *output
 	}
 
-	client, err := sheets.New(cfg.CredentialsFile, cfg.SpreadsheetID, cfg.SheetName)
+	client, err := sheets.New(cfg.CredentialsFile, cfg.SpreadsheetID, cfg.SheetName, cfg.TSVFile)
 	if err != nil {
 		exitError(err)
 	}
@@ -102,7 +107,7 @@ func cmdGenerate(args []string) {
 		return
 	}
 
-	gen, err := pdf.NewGenerator(cfg.FontFile, cfg.Sender)
+	gen, err := pdf.NewGenerator(cfg.FontFile, cfg.PostalFontFile, cfg.Sender)
 	if err != nil {
 		exitError(err)
 	}
@@ -130,8 +135,17 @@ func cmdMarkSent(args []string) {
 	if err != nil {
 		exitError(err)
 	}
+	if cfg.TSVFile != "" {
+		exitError(fmt.Errorf("mark-sent は tsv_file 使用時は利用できません"))
+	}
+	if cfg.CredentialsFile == "" {
+		exitError(fmt.Errorf("mark-sent は credentials_file 設定時のみ利用できます"))
+	}
+	if cfg.SpreadsheetID == "" {
+		exitError(fmt.Errorf("mark-sent には spreadsheet_id が必要です"))
+	}
 
-	client, err := sheets.New(cfg.CredentialsFile, cfg.SpreadsheetID, cfg.SheetName)
+	client, err := sheets.New(cfg.CredentialsFile, cfg.SpreadsheetID, cfg.SheetName, cfg.TSVFile)
 	if err != nil {
 		exitError(err)
 	}
@@ -177,7 +191,7 @@ func cmdList(args []string) {
 		exitError(err)
 	}
 
-	client, err := sheets.New(cfg.CredentialsFile, cfg.SpreadsheetID, cfg.SheetName)
+	client, err := sheets.New(cfg.CredentialsFile, cfg.SpreadsheetID, cfg.SheetName, cfg.TSVFile)
 	if err != nil {
 		exitError(err)
 	}

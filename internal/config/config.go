@@ -19,7 +19,9 @@ type Config struct {
 	SpreadsheetID   string `json:"spreadsheet_id"`
 	SheetName       string `json:"sheet_name"`
 	CredentialsFile string `json:"credentials_file"`
+	TSVFile         string `json:"tsv_file"`
 	FontFile        string `json:"font_file"`
+	PostalFontFile  string `json:"postal_font_file"`
 	OutputFile      string `json:"output_file"`
 	Year            int    `json:"year"`
 	Sender          Sender `json:"sender"`
@@ -41,11 +43,8 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("設定ファイルの形式が不正です: %w", err)
 	}
 
-	if cfg.SpreadsheetID == "" {
-		return nil, fmt.Errorf("spreadsheet_id が設定されていません")
-	}
-	if cfg.CredentialsFile == "" {
-		return nil, fmt.Errorf("credentials_file が設定されていません")
+	if cfg.SpreadsheetID == "" && cfg.TSVFile == "" {
+		return nil, fmt.Errorf("spreadsheet_id または tsv_file のどちらかを設定してください")
 	}
 	if cfg.FontFile == "" {
 		return nil, fmt.Errorf("font_file が設定されていません")

@@ -1,8 +1,10 @@
 {
   "spreadsheet_id": "ここにスプレッドシートのIDを入れる",
   "sheet_name": "住所録",
-  "credentials_file": "credentials.json",
-  "font_file": "/usr/share/fonts/opentype/ipaexfont-mincho/ipaexm.ttf",
+  "credentials_file": "",
+  "tsv_file": "",
+  "font_file": "/path/to/YujiSyuku-Regular.ttf",
+  "postal_font_file": "/path/to/Arial-Unicode.ttf",
   "output_file": "nenga.pdf",
   "year": 2026,
   "sender": {
