@@ -3,3 +3,6 @@ config.json
 credentials.json
 *.pdf
 .gocache/
+.DS_Store
+.vscode/
+samples/*_page1.png
